@@ -8,10 +8,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"html"
 	"os"
 	"strconv"
 	"text/template"
@@ -50,17 +51,15 @@ var (
 	tmpls *template.Template
 )
 
-//
 // Data used by the frame templates, common to every page
-//
 type FrameData struct {
-	Title string
+	Title      string
 	IsLoggedIn bool
 }
 
 func loadTemplates() {
 	tmpls = template.New("tmpls")
-	toParse := []string {
+	toParse := []string{
 		"data/frame-pre-content.html",
 		"data/frame-post-content.html",
 		"data/login.html",
@@ -77,7 +76,7 @@ func loadTemplates() {
 			// and can't be handled.
 			log.Fatal(err)
 		}
-		// Successive calls to Parse allow adding more templates to the 
+		// Successive calls to Parse allow adding more templates to the
 		// same object, if they are wrapped in a {{ define }} block.
 		tmpls, err = tmpls.Parse(string(f))
 		if err != nil {
@@ -194,17 +193,13 @@ func AddContext(next http.Handler) http.Handler {
 	})
 }
 
-// 
 // Data required for rendering the login page
-//
 type LoginData struct {
 	*FrameData
 	Error string
 }
 
-//
 // loginForm shows the login-form to the user, via the template `login.html`.
-//
 func loginForm(response http.ResponseWriter, request *http.Request) {
 	//
 	// Lookup the HTML template
@@ -215,7 +210,7 @@ func loginForm(response http.ResponseWriter, request *http.Request) {
 	// Execute the template into our buffer.
 	//
 	buf := &bytes.Buffer{}
-	err := t.Execute(buf, &LoginData{&FrameData{"Login", false},""})
+	err := t.Execute(buf, &LoginData{&FrameData{"Login", false}, ""})
 
 	//
 	// If there were errors, then show them.
@@ -231,9 +226,7 @@ func loginForm(response http.ResponseWriter, request *http.Request) {
 	buf.WriteTo(response)
 }
 
-//
 // validate tests a login is correct.
-//
 func validate(host string, username string, password string) (bool, error) {
 
 	x := NewIMAP(host, username, password)
@@ -248,9 +241,7 @@ func validate(host string, username string, password string) (bool, error) {
 	return true, nil
 }
 
-//
 // Process a login-event.
-//
 func loginHandler(response http.ResponseWriter, request *http.Request) {
 	//
 	// Get the hostname/username/password from the incoming submission
@@ -337,9 +328,7 @@ func indexPageHandler(response http.ResponseWriter, request *http.Request) {
 
 }
 
-//
 // Show the folder-list
-//
 func folderListHandler(response http.ResponseWriter, request *http.Request) {
 	user := request.Context().Value(keyUser)
 	pass := request.Context().Value(keyPass)
@@ -365,7 +354,7 @@ func folderListHandler(response http.ResponseWriter, request *http.Request) {
 	x := &PageData{
 		&FrameData{"Folders", true},
 		"",
-		make([]IMAPFolder,0),
+		make([]IMAPFolder, 0),
 	}
 
 	//
@@ -416,9 +405,7 @@ func folderListHandler(response http.ResponseWriter, request *http.Request) {
 	buf.WriteTo(response)
 }
 
-//
 // Show the messages in the given folder.
-//
 func messageListHandler(response http.ResponseWriter, request *http.Request) {
 	user := request.Context().Value(keyUser)
 	pass := request.Context().Value(keyPass)
@@ -726,9 +713,7 @@ func attachmentHandler(response http.ResponseWriter, request *http.Request) {
 	fmt.Fprintf(response, "Failed to find attachment")
 }
 
-//
 // logout handler
-//
 func logoutHandler(response http.ResponseWriter, request *http.Request) {
 	cookie := &http.Cookie{
 		Name:   "cookie",
@@ -742,9 +727,11 @@ func logoutHandler(response http.ResponseWriter, request *http.Request) {
 
 // main is our entry-point
 func main() {
+	log.SetFlags(log.Lmicroseconds | log.LstdFlags | log.Llongfile)
+
 	//
 	// Load our HTML templates
-	// 
+	//
 	loadTemplates()
 
 	//
@@ -833,4 +820,13 @@ func main() {
 	if err != nil {
 		fmt.Printf("\nError starting HTTP server: %s\n", err.Error())
 	}
+}
+
+// Return the contents of a resource.
+func getResource(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	return io.ReadAll(f)
 }
